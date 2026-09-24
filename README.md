@@ -1,2 +1,539 @@
-# cantilever-beam-calculator
-Cantilever Beam Deflection and Stress Calculator using Python and Streamlit
+import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+
+st.set_page_config(
+    page_title="Cantilever Beam Calculator",
+    page_icon="🔧",
+    layout="wide"
+)
+
+# ============================================================
+# TITLE
+# ============================================================
+
+st.title("🔧 Cantilever Beam Deflection & Stress Calculator")
+st.subheader("Diploma in Mechanical Engineering – Semester 3")
+
+st.info(
+    "This application calculates Section Modulus (Z), "
+    "Maximum Bending Stress, and Free-End Deflection "
+    "for a cantilever beam carrying a point load at its free end."
+)
+
+# ============================================================
+# TEAM DETAILS
+# ============================================================
+
+with st.expander("👥 Team Details", expanded=True):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        group_no = st.text_input("Group Number", "Group 01")
+
+    with col2:
+        st.write("**Course:** Diploma in Mechanical Engineering")
+        st.write("**Semester:** 3")
+
+    st.text_input(
+        "Member 1 Name & Enrollment No.",
+        "Enter Name - Enrollment No."
+    )
+
+    st.text_input(
+        "Member 2 Name & Enrollment No.",
+        "Enter Name - Enrollment No."
+    )
+
+    st.text_input(
+        "Member 3 Name & Enrollment No.",
+        "Enter Name - Enrollment No."
+    )
+
+# ============================================================
+# SIDEBAR - INPUTS
+# ============================================================
+
+st.sidebar.header("⚙️ Beam Inputs")
+
+# Beam length
+L_mm = st.sidebar.number_input(
+    "Beam Length L (mm)",
+    min_value=1.0,
+    max_value=10000.0,
+    value=1000.0,
+    step=10.0
+)
+
+# End load
+P_N = st.sidebar.number_input(
+    "End Load P (N)",
+    min_value=0.1,
+    max_value=1000000.0,
+    value=1000.0,
+    step=100.0
+)
+
+# Cross section
+section = st.sidebar.selectbox(
+    "Select Cross-Section",
+    [
+        "Solid Rectangle",
+        "Solid Circular",
+        "I-Section"
+    ]
+)
+
+st.sidebar.subheader("📐 Section Dimensions")
+
+# ============================================================
+# SECTION PROPERTIES
+# ============================================================
+
+if section == "Solid Rectangle":
+
+    b_mm = st.sidebar.number_input(
+        "Width b (mm)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=50.0,
+        step=1.0
+    )
+
+    h_mm = st.sidebar.number_input(
+        "Height h (mm)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=100.0,
+        step=1.0
+    )
+
+    # Convert mm to m
+    b = b_mm / 1000
+    h = h_mm / 1000
+
+    # Moment of inertia
+    I = (b * h**3) / 12
+
+    # Section modulus
+    Z = (b * h**2) / 6
+
+    dimensions_text = f"b = {b_mm:.1f} mm, h = {h_mm:.1f} mm"
+
+
+elif section == "Solid Circular":
+
+    d_mm = st.sidebar.number_input(
+        "Diameter d (mm)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=50.0,
+        step=1.0
+    )
+
+    d = d_mm / 1000
+
+    # Moment of inertia
+    I = (math.pi * d**4) / 64
+
+    # Section modulus
+    Z = (math.pi * d**3) / 32
+
+    dimensions_text = f"d = {d_mm:.1f} mm"
+
+
+else:
+
+    # I-section dimensions
+    bf_mm = st.sidebar.number_input(
+        "Flange Width bf (mm)",
+        min_value=1.0,
+        max_value=1000.0,
+        value=100.0,
+        step=1.0
+    )
+
+    tf_mm = st.sidebar.number_input(
+        "Flange Thickness tf (mm)",
+        min_value=1.0,
+        max_value=500.0,
+        value=10.0,
+        step=1.0
+    )
+
+    tw_mm = st.sidebar.number_input(
+        "Web Thickness tw (mm)",
+        min_value=1.0,
+        max_value=500.0,
+        value=8.0,
+        step=1.0
+    )
+
+    D_mm = st.sidebar.number_input(
+        "Overall Height D (mm)",
+        min_value=1.0,
+        max_value=1500.0,
+        value=150.0,
+        step=1.0
+    )
+
+    # Convert to metres
+    bf = bf_mm / 1000
+    tf = tf_mm / 1000
+    tw = tw_mm / 1000
+    D = D_mm / 1000
+
+    # Validation
+    if 2 * tf >= D:
+        st.sidebar.error(
+            "Invalid I-section: 2 × flange thickness must be less than overall height."
+        )
+        st.stop()
+
+    # Moment of inertia about horizontal centroidal axis
+    I_flange = 2 * (
+        (bf * tf**3) / 12
+        + (bf * tf) * ((D / 2 - tf / 2) ** 2)
+    )
+
+    I_web = tw * (D - 2 * tf) ** 3 / 12
+
+    I = I_flange + I_web
+
+    # Section modulus
+    Z = I / (D / 2)
+
+    dimensions_text = (
+        f"bf = {bf_mm:.1f} mm, "
+        f"tf = {tf_mm:.1f} mm, "
+        f"tw = {tw_mm:.1f} mm, "
+        f"D = {D_mm:.1f} mm"
+    )
+
+# ============================================================
+# MATERIAL SELECTION
+# ============================================================
+
+st.sidebar.header("🧱 Material")
+
+material = st.sidebar.selectbox(
+    "Select Material",
+    [
+        "Mild Steel",
+        "Aluminum",
+        "Brass"
+    ]
+)
+
+# Young's modulus in GPa
+# Yield strength in MPa
+materials = {
+    "Mild Steel": {
+        "E": 200e9,
+        "yield": 250
+    },
+    "Aluminum": {
+        "E": 69e9,
+        "yield": 95
+    },
+    "Brass": {
+        "E": 100e9,
+        "yield": 200
+    }
+}
+
+E = materials[material]["E"]
+yield_strength = materials[material]["yield"]
+
+# ============================================================
+# CALCULATIONS
+# ============================================================
+
+L = L_mm / 1000
+P = P_N
+
+# Maximum bending moment
+M = P * L
+
+# Maximum bending stress
+stress_Pa = M / Z
+
+stress_MPa = stress_Pa / 1e6
+
+# Maximum deflection
+delta_m = (P * L**3) / (3 * E * I)
+
+delta_mm = delta_m * 1000
+
+# ============================================================
+# VALIDATION
+# ============================================================
+
+if P_N <= 0:
+    st.error("Load must be greater than zero.")
+
+if L_mm <= 0:
+    st.error("Beam length must be greater than zero.")
+
+if stress_MPa > yield_strength:
+    stress_status = "FAIL"
+else:
+    stress_status = "SAFE"
+
+# ============================================================
+# RESULTS
+# ============================================================
+
+st.header("📊 Calculation Results")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "Moment of Inertia (I)",
+        f"{I:.4e} m⁴"
+    )
+
+with col2:
+    st.metric(
+        "Section Modulus (Z)",
+        f"{Z:.4e} m³"
+    )
+
+with col3:
+    st.metric(
+        "Maximum Bending Moment",
+        f"{M:.2f} N·m"
+    )
+
+col4, col5, col6 = st.columns(3)
+
+with col4:
+    st.metric(
+        "Maximum Bending Stress",
+        f"{stress_MPa:.2f} MPa"
+    )
+
+with col5:
+    st.metric(
+        "End Deflection",
+        f"{delta_mm:.3f} mm"
+    )
+
+with col6:
+    st.metric(
+        "Yield Strength",
+        f"{yield_strength:.0f} MPa"
+    )
+
+# ============================================================
+# SAFETY CHECK
+# ============================================================
+
+st.header("🛡️ Stress Safety Check")
+
+if stress_status == "SAFE":
+
+    st.success(
+        f"✅ SAFE: Maximum bending stress "
+        f"({stress_MPa:.2f} MPa) is below the "
+        f"yield strength ({yield_strength:.0f} MPa) "
+        f"of {material}."
+    )
+
+else:
+
+    st.error(
+        f"⚠️ UNSAFE: Maximum bending stress "
+        f"({stress_MPa:.2f} MPa) exceeds the "
+        f"yield strength ({yield_strength:.0f} MPa) "
+        f"of {material}."
+    )
+
+# ============================================================
+# FORMULAS
+# ============================================================
+
+st.header("📐 Engineering Formulas Used")
+
+st.latex(
+    r"M_{max}=P L"
+)
+
+st.latex(
+    r"\sigma_{max}=\frac{M_{max}}{Z}"
+)
+
+st.latex(
+    r"\delta_{max}=\frac{P L^3}{3EI}"
+)
+
+if section == "Solid Rectangle":
+
+    st.write("### Solid Rectangle")
+
+    st.latex(
+        r"I=\frac{bh^3}{12}"
+    )
+
+    st.latex(
+        r"Z=\frac{bh^2}{6}"
+    )
+
+elif section == "Solid Circular":
+
+    st.write("### Solid Circular")
+
+    st.latex(
+        r"I=\frac{\pi d^4}{64}"
+    )
+
+    st.latex(
+        r"Z=\frac{\pi d^3}{32}"
+    )
+
+else:
+
+    st.write("### I-Section")
+
+    st.latex(
+        r"I=2\left[\frac{b_f t_f^3}{12}"
+        r"+b_f t_f\left(\frac{D}{2}-\frac{t_f}{2}\right)^2\right]"
+        r"+\frac{t_w(D-2t_f)^3}{12}"
+    )
+
+    st.latex(
+        r"Z=\frac{I}{D/2}"
+    )
+
+# ============================================================
+# BENDING MOMENT DIAGRAM
+# ============================================================
+
+st.header("📈 Bending Moment Diagram")
+
+x = np.linspace(0, L_mm, 100)
+
+# For cantilever with point load at free end:
+# Moment varies from PL at fixed end to 0 at free end
+moment = P_N * (L_mm - x)
+
+fig1, ax1 = plt.subplots()
+
+ax1.plot(x, moment, linewidth=2)
+
+ax1.fill_between(x, moment, alpha=0.2)
+
+ax1.set_title("Bending Moment Diagram")
+ax1.set_xlabel("Distance from Fixed End (mm)")
+ax1.set_ylabel("Bending Moment (N·mm)")
+
+ax1.grid(True)
+
+st.pyplot(fig1)
+
+# ============================================================
+# DEFLECTION CURVE
+# ============================================================
+
+st.header("📉 Cantilever Deflection Curve")
+
+# Deflection equation for point load at free end:
+# y = P*x^2*(3L-x)/(6EI)
+
+x_m = np.linspace(0, L, 100)
+
+deflection_m = (
+    P_N
+    * x_m**2
+    * (3 * L - x_m)
+    / (6 * E * I)
+)
+
+deflection_mm = deflection_m * 1000
+
+fig2, ax2 = plt.subplots()
+
+ax2.plot(
+    x_m * 1000,
+    deflection_mm,
+    linewidth=2
+)
+
+ax2.set_title("Cantilever Beam Deflection Curve")
+ax2.set_xlabel("Distance from Fixed End (mm)")
+ax2.set_ylabel("Deflection (mm)")
+
+ax2.grid(True)
+
+st.pyplot(fig2)
+
+# ============================================================
+# INPUT SUMMARY
+# ============================================================
+
+st.header("📋 Input Summary")
+
+summary = {
+    "Parameter": [
+        "Group",
+        "Material",
+        "Cross-Section",
+        "Beam Length",
+        "End Load",
+        "Section Dimensions"
+    ],
+    "Value": [
+        group_no,
+        material,
+        section,
+        f"{L_mm:.2f} mm",
+        f"{P_N:.2f} N",
+        dimensions_text
+    ]
+}
+
+st.table(summary)
+
+# ============================================================
+# ENGINEERING CONCLUSION
+# ============================================================
+
+st.header("📝 Engineering Conclusion")
+
+if stress_status == "SAFE":
+
+    st.write(
+        f"The selected {material} {section.lower()} cantilever beam "
+        f"has a maximum bending stress of {stress_MPa:.2f} MPa "
+        f"and an end deflection of {delta_mm:.3f} mm. "
+        f"The calculated stress is below the material yield strength "
+        f"of {yield_strength:.0f} MPa."
+    )
+
+else:
+
+    st.write(
+        f"The selected {material} {section.lower()} cantilever beam "
+        f"has a maximum bending stress of {stress_MPa:.2f} MPa "
+        f"and an end deflection of {delta_mm:.3f} mm. "
+        f"The calculated stress exceeds the material yield strength "
+        f"of {yield_strength:.0f} MPa. The selected beam dimensions "
+        f"or applied load should therefore be reviewed."
+    )
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown("---")
+
+st.caption(
+    "Python Mini Project | Diploma in Mechanical Engineering | "
+    "Cantilever Beam Deflection & Stress Calculator"
+)
